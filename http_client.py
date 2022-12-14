@@ -1,0 +1,104 @@
+import socket
+import base64
+
+from typing import Iterator, Optional
+
+
+def _process_headers(**headers) -> Iterator[bytes]:
+    for key, value in headers.items():
+        if key in ('Content-Length', 'Content-Type', 'data', 'password'):
+            continue
+        if key == 'user':
+            yield _encode_basic_auth(headers['user'], headers['password'])
+        else:
+            yield f'{key}: {value}\r\n'.encode()
+
+    if 'data' in headers:
+        yield from _process_data(headers['data'])
+
+
+def _encode_basic_auth(user: str, password: str) -> bytes:
+    if ':' in user or ':' in password:
+        raise ValueError('Auth should not contain ":"')
+    auth_str = base64.b64encode(f'{user}:{password}'.encode())
+    return b'Authorization: Basic ' + auth_str + b'\r\n'
+
+
+def _process_data(data: str) -> Iterator[bytes]:
+    yield f'Content-Length: {len(data)}\r\n'.encode()
+    yield 'Content-Type: application/x-www-form-urlencoded\r\n'.encode()
+    yield '\r\n'.encode()
+    yield data.encode()
+
+
+def _parse_additional_headers(data: str) -> dict:
+    headers = {}
+    for line in data.split('\r\n'):
+        if not line:
+            continue
+        key, value = line.split(': ', 1)
+        headers[key] = value
+    return headers
+
+
+def write_response_to_file(
+        filename: str,
+        client: 'HttpClient',
+        method: str = 'GET',
+        **headers
+) -> None:
+    with open(filename, 'wb') as f:
+        client.send(method, **headers)
+
+        for chunk in client.recv_all():
+            f.write(chunk)
+
+
+class HttpClient:
+    def __init__(self, dst_url, dst_port, timeout: Optional[int] = None):
+        self.dst_url = dst_url
+        self.dst_port = dst_port
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((self.dst_url, self.dst_port))
+
+        if timeout is not None:
+            self.sock.settimeout(timeout)
+
+    def send(self, method='GET', **headers):
+        query = (
+            ' '.join([method.upper(), '/', 'HTTP/1.1\r\n']).encode()
+        )
+        headers = self._make_headers_overrides(**headers)
+        for header in _process_headers(**headers):
+            query += header
+        if not query.endswith(b'\r\n\r\n') and 'data' not in headers:
+            query += b'\r\n'
+        self.sock.send(query)
+
+    def recv_all(self, size: int = 1024) -> Iterator[bytes]:
+        chunk = self._try_recv(size)
+        yield chunk
+        while len(chunk) > 0:
+            chunk = self._try_recv(size, got_any=True)
+            yield chunk
+
+    def close(self):
+        self.sock.close()
+
+    def _try_recv(self, size, got_any=False) -> bytes:
+        try:
+            return self.sock.recv(size)
+        except socket.timeout as e:
+            if got_any:
+                return b''
+            raise TimeoutError('Waiting for response timed out') from e
+
+    def _make_headers_overrides(self, **headers) -> dict:
+        if 'additional_headers' in headers:
+            headers = {
+                **headers, **_parse_additional_headers(
+                    headers['additional_headers']
+                )
+            }
+        headers = {'Host': self.dst_url, **headers}
+        return headers
