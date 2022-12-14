@@ -1,4 +1,5 @@
 from http_client import HttpClient, write_response_to_file
+from sockets import HttpSocket, HttpsSocket
 import click
 
 
@@ -16,19 +17,28 @@ import click
 @click.option('--cookie', '-c', help='Cookie')
 @click.option('--websocket', '-w', is_flag=True, help='Use WebSocket')
 def main(method, url, headers, data, output, user, password, https, timeout, user_agent, cookie, websocket): # noqa: E501
+    if '/' in url:
+        host, url = url.split('/', 1)
+        url = '/' + url
+    else:
+        host = url
+        url = '/'
+    headers = {'headers': headers}
     if user and password:
         user = f'{user}:{password}'
-        headers += user
+        headers['user'] = user
 
     if user_agent:
-        headers += f'\r\nUser-Agent: {user_agent}'
+        headers['User-Agent'] = user_agent
 
     if cookie:
-        headers += f'\r\nCookie: {cookie}'
+        headers['Cookie'] = cookie
 
-    client = HttpClient(url, https, timeout)
-    if websocket:
-        client._send(method, **{'Upgrade': 'websocket', 'Connection': 'Upgrade
+    sock = (HttpsSocket(host, timeout=timeout) if https
+            else HttpSocket(host, timeout=timeout))
+
+    client = HttpClient(url, sock)
+    client.get_response(method, url, **headers)
 
 
 
