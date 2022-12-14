@@ -5,7 +5,7 @@ import click
 @click.command()
 @click.argument('method', nargs=1, default='GET')
 @click.argument('url', nargs=1)
-@click.option('--headers', '-H', nargs=-1)
+@click.option('--headers', '-H', nargs=1, type=str)
 @click.option('--data', '-d', help='Data to send')
 @click.option('--output', '-o', help='Output file', default=None)
 @click.option('--user', '-u', help='Username')
@@ -18,12 +18,13 @@ import click
 def main(method, url, headers, data, output, user, password, https, timeout, user_agent, cookie, websocket): # noqa: E501
     if user and password:
         user = f'{user}:{password}'
+        headers += user
 
     if user_agent:
-        headers = list(headers) + [f'User-Agent: {user_agent}']
+        headers += f'\r\nUser-Agent: {user_agent}'
 
     if cookie:
-        headers = list(headers) + [f'Cookie: {cookie}']
+        headers += f'\r\nCookie: {cookie}'
 
     client = HttpClient(url, https, timeout)
     if websocket:
