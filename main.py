@@ -2,13 +2,6 @@ from http_client import HttpClient, write_response_to_file
 import click
 
 
-client = HttpClient('www.google.com', 80)
-client.send('POST', data='data', user='user', password='password')
-for chunk in client.recv_all():
-    print(chunk.decode())
-
-client.close()
-
 @click.command()
 @click.argument('method', nargs=1, default='GET')
 @click.argument('url', nargs=1)
@@ -22,7 +15,7 @@ client.close()
 @click.option('--user_agent', '-A', help='User-Agent')
 @click.option('--cookie', '-c', help='Cookie')
 @click.option('--websocket', '-w', is_flag=True, help='Use WebSocket')
-def main(method, url, headers, data, output, user, password, https, timeout, user_agent, cookie, websocket):
+def main(method, url, headers, data, output, user, password, https, timeout, user_agent, cookie, websocket): # noqa: E501
     if user and password:
         user = f'{user}:{password}'
 
@@ -34,7 +27,7 @@ def main(method, url, headers, data, output, user, password, https, timeout, use
 
     client = HttpClient(url, https, timeout)
     if websocket:
-        client.send(method, **{'Upgrade': 'websocket', 'Connection': 'Upgrade
+        client._send(method, **{'Upgrade': 'websocket', 'Connection': 'Upgrade
 
 
 

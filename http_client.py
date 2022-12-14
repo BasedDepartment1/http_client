@@ -1,8 +1,8 @@
 import socket
 import base64
-import ssl
 
-from typing import Iterator, Optional
+from sockets import HttpSocket
+from typing import Iterator
 
 
 def _process_headers(**headers) -> Iterator[bytes]:
@@ -47,33 +47,25 @@ def write_response_to_file(
         filename: str,
         client: 'HttpClient',
         method: str = 'GET',
+        url: str = '/',
         **headers
 ) -> None:
     with open(filename, 'wb') as f:
-        client.send(method, **headers)
-
-        for chunk in client.recv_all():
+        for chunk in client.get_response(method, url, **headers):
             f.write(chunk)
 
 
 class HttpClient:
-    def __init__(self,
-                 dst_url,
-                 https=False,
-                 timeout: Optional[int] = None
-                 ):
+    def __init__(self, dst_url, sock: HttpSocket):
         self.dst_url = dst_url
-        self.dst_port = 443 if https else 80
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((self.dst_url, self.dst_port))
+        self.sock = sock
 
-        if https:
-            self.sock = ssl.wrap_socket(self.sock)
+    def get_response(self, method='GET',
+                     url='/', **headers) -> Iterator[bytes]:
+        self._send(method, url, **headers)
+        yield from self._recv_all()
 
-        if timeout is not None:
-            self.sock.settimeout(timeout)
-
-    def send(self, method='GET', url='/', **headers):
+    def _send(self, method='GET', url='/', **headers):
         query = (
             ' '.join([method.upper(), url, 'HTTP/1.1\r\n']).encode()
         )
@@ -84,15 +76,12 @@ class HttpClient:
             query += b'\r\n'
         self.sock.send(query)
 
-    def recv_all(self, size: int = 1024) -> Iterator[bytes]:
+    def _recv_all(self, size: int = 1024) -> Iterator[bytes]:
         chunk = self._try_recv(size)
         yield chunk
         while len(chunk) > 0:
             chunk = self._try_recv(size, got_any=True)
             yield chunk
-
-    def close(self):
-        self.sock.close()
 
     def _try_recv(self, size, got_any=False) -> bytes:
         try:
