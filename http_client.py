@@ -98,5 +98,6 @@ class HttpClient:
                     headers['additional_headers']
                 )
             }
+        del headers['additional_headers']
         headers = {'Host': self.dst_url, **headers}
         return headers

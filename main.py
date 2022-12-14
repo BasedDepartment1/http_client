@@ -23,7 +23,7 @@ def main(method, url, headers, data, output, user, password, https, timeout, use
     else:
         host = url
         url = '/'
-    headers = {'headers': headers} if headers else {}
+    headers = {'additional_headers': headers} if headers else {}
     if user and password:
         user = f'{user}:{password}'
         headers['user'] = user
