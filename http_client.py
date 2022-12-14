@@ -1,15 +1,16 @@
 import socket
 import base64
+import ssl
 
 from typing import Iterator, Optional
 
 
 def _process_headers(**headers) -> Iterator[bytes]:
     for key, value in headers.items():
-        if key in ('Content-Length', 'Content-Type', 'data', 'password'):
+        if key in ('Content-Length', 'Content-Type', 'data'):
             continue
         if key == 'user':
-            yield _encode_basic_auth(headers['user'], headers['password'])
+            yield _encode_basic_auth(headers['user'])
         else:
             yield f'{key}: {value}\r\n'.encode()
 
@@ -17,9 +18,10 @@ def _process_headers(**headers) -> Iterator[bytes]:
         yield from _process_data(headers['data'])
 
 
-def _encode_basic_auth(user: str, password: str) -> bytes:
+def _encode_basic_auth(user: str) -> bytes:
+    user, password = user.split(':', 1)
     if ':' in user or ':' in password:
-        raise ValueError('Auth should not contain ":"')
+        raise ValueError('Username and password should not contain ":"')
     auth_str = base64.b64encode(f'{user}:{password}'.encode())
     return b'Authorization: Basic ' + auth_str + b'\r\n'
 
@@ -55,11 +57,18 @@ def write_response_to_file(
 
 
 class HttpClient:
-    def __init__(self, dst_url, dst_port, timeout: Optional[int] = None):
+    def __init__(self,
+                 dst_url,
+                 https=False,
+                 timeout: Optional[int] = None
+                 ):
         self.dst_url = dst_url
-        self.dst_port = dst_port
+        self.dst_port = 443 if https else 80
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.dst_url, self.dst_port))
+
+        if https:
+            self.sock = ssl.wrap_socket(self.sock)
 
         if timeout is not None:
             self.sock.settimeout(timeout)
