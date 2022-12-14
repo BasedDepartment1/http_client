@@ -64,9 +64,9 @@ class HttpClient:
         if timeout is not None:
             self.sock.settimeout(timeout)
 
-    def send(self, method='GET', **headers):
+    def send(self, method='GET', url='/', **headers):
         query = (
-            ' '.join([method.upper(), '/', 'HTTP/1.1\r\n']).encode()
+            ' '.join([method.upper(), url, 'HTTP/1.1\r\n']).encode()
         )
         headers = self._make_headers_overrides(**headers)
         for header in _process_headers(**headers):
